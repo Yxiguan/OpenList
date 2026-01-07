@@ -22,8 +22,7 @@ type LoginReq struct {
 
 // 登录响应
 type LoginResp struct {
-	Token       string `json:"token"`
-	AccessToken string `json:"accessToken"`
+	Token string `json:"token"`
 }
 
 // 文件项
@@ -33,7 +32,6 @@ type FileItem struct {
 	Type      int    `json:"type"`
 	Size      int64  `json:"size"`
 	CreatedAt string `json:"CreatedAt"`
-	Category  int    `json:"category"`
 }
 
 // 文件列表响应
@@ -49,9 +47,9 @@ type DownloadResp struct {
 
 // 用户信息
 type UserInfo struct {
-	ID       string `json:"ID"`
-	Nickname string `json:"nickname"`
-	Phone    string `json:"phone"`
+	ID        string `json:"ID"`
+	Store     int64  `json:"store"`     // 总容量
+	UsedStore int64  `json:"usedStore"` // 已使用容量
 }
 
 // findFile 响应 - 秒传检测
@@ -69,7 +67,6 @@ type FindFileResp struct {
 type InitUploadResp struct {
 	UploadID string `json:"uploadId"`
 	FileName string `json:"fileName"`
-	URL      string `json:"url"`
 }
 
 // getMultiUploadUrls 响应

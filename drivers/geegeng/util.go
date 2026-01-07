@@ -30,9 +30,8 @@ func (d *GeeCeng) getToken() string {
 	return d.token
 }
 
-func (d *GeeCeng) setToken(token, accessToken string) {
+func (d *GeeCeng) setToken(token string) {
 	d.token = token
-	d.accessToken = accessToken
 }
 
 // 统一请求方法
@@ -140,7 +139,7 @@ func (d *GeeCeng) login() error {
 		return errors.New("login failed: no token received")
 	}
 
-	d.setToken(loginResp.Token, loginResp.AccessToken)
+	d.setToken(loginResp.Token)
 	return nil
 }
 
@@ -156,8 +155,8 @@ func (d *GeeCeng) getUserInfo() (*UserInfo, error) {
 	return &resp.UserInfo, nil
 }
 
-// 上传节点请求
-func (d *GeeCeng) uploadNodeRequest(nodeUrl, path string, formData map[string]string, out interface{}) error {
+// 统一的上传节点请求方法
+func (d *GeeCeng) doNodeRequest(method, nodeUrl, path string, data map[string]string, out interface{}) error {
 	u := strings.TrimSuffix(nodeUrl, "/") + path
 	req := base.RestyClient.R()
 	req.SetHeaders(map[string]string{
@@ -166,7 +165,13 @@ func (d *GeeCeng) uploadNodeRequest(nodeUrl, path string, formData map[string]st
 		"Referer":    Address + "/",
 		"Origin":     Address,
 	})
-	req.SetFormData(formData)
+
+	// 根据 method 设置参数
+	if method == http.MethodGet {
+		req.SetQueryParams(data)
+	} else {
+		req.SetFormData(data)
+	}
 
 	type NodeResp struct {
 		Code int         `json:"code"`
@@ -177,54 +182,7 @@ func (d *GeeCeng) uploadNodeRequest(nodeUrl, path string, formData map[string]st
 	var r NodeResp
 	req.SetResult(&r)
 
-	resp, err := req.Post(u)
-	if err != nil {
-		return err
-	}
-	if !resp.IsSuccess() {
-		return errors.New(resp.String())
-	}
-
-	if r.Code != 1 && r.Code != 0 {
-		return errors.New(r.Msg)
-	}
-
-	if out != nil && r.Data != nil {
-		marshal, err := jsoniter.Marshal(r.Data)
-		if err != nil {
-			return err
-		}
-		err = jsoniter.Unmarshal(marshal, out)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// 上传节点 GET 请求
-func (d *GeeCeng) uploadNodeGet(nodeUrl, path string, params map[string]string, out interface{}) error {
-	u := strings.TrimSuffix(nodeUrl, "/") + path
-	req := base.RestyClient.R()
-	req.SetHeaders(map[string]string{
-		"Accept":     "application/json, text/plain, */*",
-		"User-Agent": base.UserAgent,
-		"Referer":    Address + "/",
-		"Origin":     Address,
-	})
-	req.SetQueryParams(params)
-
-	type NodeResp struct {
-		Code int         `json:"code"`
-		Msg  string      `json:"msg"`
-		Data interface{} `json:"data"`
-	}
-
-	var r NodeResp
-	req.SetResult(&r)
-
-	resp, err := req.Get(u)
+	resp, err := req.Execute(method, u)
 	if err != nil {
 		return err
 	}
