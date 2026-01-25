@@ -26,16 +26,12 @@ const (
 // 分片 buffer 池，复用内存减少 GC
 var chunkPool = sync.Pool{
 	New: func() interface{} {
-		buf := make([]byte, chunkSize)
-		return &buf
+		return make([]byte, chunkSize)
 	},
 }
 
 func (d *GeeCeng) Put(ctx context.Context, dstDir model.Obj, file model.FileStreamer, up driver.UpdateProgress) (model.Obj, error) {
-	parentId := dstDir.GetID()
-	if parentId == "" {
-		parentId = "-1"
-	}
+	parentId := d.normalizeParentID(dstDir.GetID())
 
 	fileSize := file.GetSize()
 	fileName := file.GetName()
@@ -119,13 +115,12 @@ func (d *GeeCeng) Put(ctx context.Context, dstDir model.Obj, file model.FileStre
 		}
 
 		// 从池中获取 buffer
-		bufPtr := chunkPool.Get().(*[]byte)
-		buf := *bufPtr
+		buf := chunkPool.Get().([]byte)
 
 		// 从临时文件读取分片
 		n, err := io.ReadFull(tempFile, buf)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-			chunkPool.Put(bufPtr)
+			chunkPool.Put(buf)
 			return nil, fmt.Errorf("read chunk %d failed: %w", i+1, err)
 		}
 		chunk := buf[:n]
@@ -136,7 +131,7 @@ func (d *GeeCeng) Put(ctx context.Context, dstDir model.Obj, file model.FileStre
 
 		// 上传分片（带重试）
 		err = d.uploadChunkWithRetry(ctx, nodeUrl, serverFileName, uploadId, i+1, chunk, chunkMd5)
-		chunkPool.Put(bufPtr) // 归还 buffer
+		chunkPool.Put(buf) // 归还 buffer
 
 		if err != nil {
 			return nil, err

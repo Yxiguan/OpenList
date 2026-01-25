@@ -81,15 +81,8 @@ func parseTime(s string) time.Time {
 	if s == "" {
 		return time.Time{}
 	}
-	formats := []string{
-		time.RFC3339,
-	}
-	for _, format := range formats {
-		if t, err := time.Parse(format, s); err == nil {
-			return t
-		}
-	}
-	return time.Time{}
+	t, _ := time.Parse(time.RFC3339, s)
+	return t
 }
 
 // GeeCengObject 自定义对象类型，存储 parentId

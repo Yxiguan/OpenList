@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/mitchellh/mapstructure"
 )
 
 const (
@@ -77,13 +77,14 @@ func (d *GeeCeng) request(method string, path string, callback base.ReqCallback,
 	}
 
 	if out != nil && r.Data != nil {
-		var marshal []byte
-		marshal, err = jsoniter.Marshal(r.Data)
+		decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			Result:  out,
+			TagName: "json",
+		})
 		if err != nil {
 			return err
 		}
-		err = jsoniter.Unmarshal(marshal, out)
-		if err != nil {
+		if err := decoder.Decode(r.Data); err != nil {
 			return err
 		}
 	}
@@ -126,12 +127,14 @@ func (d *GeeCeng) login() error {
 	}
 
 	var loginResp LoginResp
-	marshal, err := jsoniter.Marshal(r.Data)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:  &loginResp,
+		TagName: "json",
+	})
 	if err != nil {
 		return err
 	}
-	err = jsoniter.Unmarshal(marshal, &loginResp)
-	if err != nil {
+	if err := decoder.Decode(r.Data); err != nil {
 		return err
 	}
 
@@ -195,12 +198,14 @@ func (d *GeeCeng) doNodeRequest(method, nodeUrl, path string, data map[string]st
 	}
 
 	if out != nil && r.Data != nil {
-		marshal, err := jsoniter.Marshal(r.Data)
+		decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			Result:  out,
+			TagName: "json",
+		})
 		if err != nil {
 			return err
 		}
-		err = jsoniter.Unmarshal(marshal, out)
-		if err != nil {
+		if err := decoder.Decode(r.Data); err != nil {
 			return err
 		}
 	}

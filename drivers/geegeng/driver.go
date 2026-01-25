@@ -22,6 +22,14 @@ type GeeCeng struct {
 	token string
 }
 
+// normalizeParentID 将空的 parentId 标准化为 "-1"
+func (d *GeeCeng) normalizeParentID(id string) string {
+	if id == "" {
+		return "-1"
+	}
+	return id
+}
+
 func (d *GeeCeng) Config() driver.Config {
 	return config
 }
@@ -52,10 +60,7 @@ func (d *GeeCeng) Drop(ctx context.Context) error {
 }
 
 func (d *GeeCeng) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
-	parentId := dir.GetID()
-	if parentId == "" {
-		parentId = "-1"
-	}
+	parentId := d.normalizeParentID(dir.GetID())
 
 	if (parentId == "-1" || parentId == d.Config().DefaultRoot) && d.RootFolderID != "" {
 		parentId = d.RootFolderID
@@ -118,10 +123,7 @@ func (d *GeeCeng) Link(ctx context.Context, file model.Obj, args model.LinkArgs)
 }
 
 func (d *GeeCeng) MakeDir(ctx context.Context, parentDir model.Obj, dirName string) (model.Obj, error) {
-	parentId := parentDir.GetID()
-	if parentId == "" {
-		parentId = "-1"
-	}
+	parentId := d.normalizeParentID(parentDir.GetID())
 
 	// API 响应可能返回新创建的目录信息
 	var result FileItem
@@ -145,10 +147,7 @@ func (d *GeeCeng) MakeDir(ctx context.Context, parentDir model.Obj, dirName stri
 }
 
 func (d *GeeCeng) Move(ctx context.Context, srcObj, dstDir model.Obj) (model.Obj, error) {
-	dstId := dstDir.GetID()
-	if dstId == "" {
-		dstId = "-1"
-	}
+	dstId := d.normalizeParentID(dstDir.GetID())
 
 	err := d.request(http.MethodPost, movePath, func(req *resty.Request) {
 		req.SetBody(base.Json{
@@ -202,10 +201,7 @@ func (d *GeeCeng) Rename(ctx context.Context, srcObj model.Obj, newName string) 
 }
 
 func (d *GeeCeng) Copy(ctx context.Context, srcObj, dstDir model.Obj) (model.Obj, error) {
-	dstId := dstDir.GetID()
-	if dstId == "" {
-		dstId = "-1"
-	}
+	dstId := d.normalizeParentID(dstDir.GetID())
 
 	err := d.request(http.MethodPost, copyPath, func(req *resty.Request) {
 		req.SetBody(base.Json{
