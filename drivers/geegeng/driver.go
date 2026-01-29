@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
 	"github.com/OpenListTeam/OpenList/v4/internal/driver"
@@ -68,7 +69,7 @@ func (d *GeeCeng) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 
 	var allFiles []FileItem
 	page := 1
-	pageSize := 100
+	pageSize := 50
 
 	for {
 		var fileList FileListResp
@@ -84,6 +85,13 @@ func (d *GeeCeng) List(ctx context.Context, dir model.Obj, args model.ListArgs) 
 			break
 		}
 		page++
+
+		// 添加延迟，避免触发服务器频率限制
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
 	}
 
 	return utils.SliceConvert(allFiles, func(src FileItem) (model.Obj, error) {
