@@ -25,6 +25,12 @@ type LoginResp struct {
 	Token string `json:"token"`
 }
 
+// 登录状态响应（获取密码加密密钥）
+type LoginStatusResp struct {
+	Info string `json:"info"`
+	Salt string `json:"salt"`
+}
+
 // 文件项
 type FileItem struct {
 	ID        string `json:"ID"`

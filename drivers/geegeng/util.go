@@ -1,6 +1,9 @@
 package geegeng
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"strings"
@@ -10,15 +13,16 @@ import (
 )
 
 const (
-	loginPath    = "/api/base/login"
-	fileListPath = "/api/files/getFilesList"
-	downloadPath = "/api/files/downFile"
-	mkdirPath    = "/api/files/createFolder"
-	deletePath   = "/api/files/deleteFilesByIds"
-	renamePath   = "/api/files/updateFileName"
-	movePath     = "/api/files/moveFiles"
-	copyPath     = "/api/files/copyFiles"
-	userInfoPath = "/api/user/getUserInfo"
+	loginPath       = "/api/base/login"
+	loginStatusPath = "/api/base/getBaseInfo"
+	fileListPath    = "/api/files/getFilesList"
+	downloadPath    = "/api/files/downFile"
+	mkdirPath       = "/api/files/createFolder"
+	deletePath      = "/api/files/deleteFilesByIds"
+	renamePath      = "/api/files/updateFileName"
+	movePath        = "/api/files/moveFiles"
+	copyPath        = "/api/files/copyFiles"
+	userInfoPath    = "/api/user/getUserInfo"
 	// 分片上传相关
 	findFilePath        = "/api/files/findFile"
 	initMultiUploadPath = "/initMultiUpload"
@@ -92,8 +96,106 @@ func (d *GeeCeng) request(method string, path string, callback base.ReqCallback,
 	return nil
 }
 
+// PKCS7 填充
+func pkcs7Pad(data []byte, blockSize int) []byte {
+	padding := blockSize - len(data)%blockSize
+	padtext := make([]byte, padding)
+	for i := range padtext {
+		padtext[i] = byte(padding)
+	}
+	return append(data, padtext...)
+}
+
+// PKCS7 去填充
+func pkcs7Unpad(data []byte) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, errors.New("empty data")
+	}
+	padding := int(data[len(data)-1])
+	if padding > len(data) || padding == 0 {
+		return nil, errors.New("invalid padding")
+	}
+	return data[:len(data)-padding], nil
+}
+
+// AES-CBC 加密 (key 和 iv 相同，与前端逻辑一致)
+func aesEncryptCBC(plainText, key []byte) (string, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	padded := pkcs7Pad(plainText, block.BlockSize())
+	encrypted := make([]byte, len(padded))
+	mode := cipher.NewCBCEncrypter(block, key) // iv = key
+	mode.CryptBlocks(encrypted, padded)
+	return base64.StdEncoding.EncodeToString(encrypted), nil
+}
+
+// AES-CBC 解密 (key 和 iv 相同，与前端逻辑一致)
+func aesDecryptCBC(cipherB64 string, key []byte) (string, error) {
+	cipherBytes, err := base64.StdEncoding.DecodeString(cipherB64)
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	if len(cipherBytes)%block.BlockSize() != 0 {
+		return "", errors.New("ciphertext is not a multiple of the block size")
+	}
+	mode := cipher.NewCBCDecrypter(block, key) // iv = key
+	mode.CryptBlocks(cipherBytes, cipherBytes)
+	result, err := pkcs7Unpad(cipherBytes)
+	if err != nil {
+		return "", err
+	}
+	return string(result), nil
+}
+
+// 获取登录状态（获取密码加密所需的 info 和 salt）
+func (d *GeeCeng) getLoginStatus() (*LoginStatusResp, error) {
+	var resp LoginStatusResp
+	err := d.request(http.MethodGet, loginStatusPath, nil, &resp)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 // 登录
 func (d *GeeCeng) login() error {
+	// 1. 获取加密密钥信息
+	status, err := d.getLoginStatus()
+	if err != nil {
+		return errors.New("failed to get login status: " + err.Error())
+	}
+
+	// 2. Base64 解码 salt 得到 AES 密钥
+	saltKey, err := base64.StdEncoding.DecodeString(status.Salt)
+	if err != nil {
+		return errors.New("failed to decode salt: " + err.Error())
+	}
+
+	// 3. 双重解密 info 得到真正的密码加密密钥
+	// step1 = AES_CBC_Decrypt(info, saltKey, saltKey)
+	step1, err := aesDecryptCBC(status.Info, saltKey)
+	if err != nil {
+		return errors.New("failed to decrypt info (step1): " + err.Error())
+	}
+	// realKey = AES_CBC_Decrypt(step1, saltKey, saltKey)
+	realKeyStr, err := aesDecryptCBC(step1, saltKey)
+	if err != nil {
+		return errors.New("failed to decrypt info (step2): " + err.Error())
+	}
+
+	// 4. 用 realKey 加密密码
+	encryptedPwd, err := aesEncryptCBC([]byte(d.Password), []byte(realKeyStr))
+	if err != nil {
+		return errors.New("failed to encrypt password: " + err.Error())
+	}
+
+	// 5. 发送登录请求
 	u := strings.TrimSuffix(Address, "/") + loginPath
 	req := base.RestyClient.R()
 	req.SetHeaders(map[string]string{
@@ -106,7 +208,7 @@ func (d *GeeCeng) login() error {
 
 	loginReq := LoginReq{
 		Phone:    d.Username,
-		Password: d.Password,
+		Password: encryptedPwd,
 		Captcha:  "",
 	}
 	req.SetBody(loginReq)
