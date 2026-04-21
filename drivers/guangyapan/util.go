@@ -441,30 +441,30 @@ func newOSSBucket(token *uploadTokenData) (*oss.Bucket, error) {
 	return client.Bucket(token.BucketName)
 }
 
+const (
+	guangyaWebSmallUploadLimit  int64 = 100 * utils.MB
+	guangyaWebMediumUploadLimit int64 = 1 * utils.GB
+	guangyaWebLargeUploadLimit  int64 = 10 * utils.GB
+	guangyaWebSmallPartSize     int64 = 1 * utils.MB
+	guangyaWebMediumPartSize    int64 = 2 * utils.MB
+	guangyaWebLargePartSize     int64 = 4 * utils.MB
+	guangyaWebXLargePartSize    int64 = 8 * utils.MB
+)
+
 func calcPartSize(fileSize int64) int64 {
-	partSize := int64(20 * utils.MB)
-	if fileSize <= partSize {
-		return partSize
+	// Mirror the current web uploader's chunk sizing strategy.
+	switch {
+	case fileSize <= 0:
+		return guangyaWebSmallPartSize
+	case fileSize <= guangyaWebSmallUploadLimit:
+		return guangyaWebSmallPartSize
+	case fileSize <= guangyaWebMediumUploadLimit:
+		return guangyaWebMediumPartSize
+	case fileSize <= guangyaWebLargeUploadLimit:
+		return guangyaWebLargePartSize
+	default:
+		return guangyaWebXLargePartSize
 	}
-	if fileSize > 1*utils.TB {
-		return 5 * utils.GB
-	}
-	if fileSize > 768*utils.GB {
-		return 109951163
-	}
-	if fileSize > 512*utils.GB {
-		return 82463373
-	}
-	if fileSize > 384*utils.GB {
-		return 54975582
-	}
-	if fileSize > 256*utils.GB {
-		return 41231687
-	}
-	if fileSize > 128*utils.GB {
-		return 27487791
-	}
-	return partSize
 }
 
 func (d *GuangyaPan) uploadObject(ctx context.Context, stream model.FileStreamer, up driver.UpdateProgress, token *uploadTokenData) error {
