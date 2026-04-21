@@ -26,6 +26,9 @@ func (d *GuangyaPan) Init(ctx context.Context) error {
 	}
 	d.DeviceID = did
 	d.DeviceSign = sign
+	if _, err := d.normalizeClientID(); err != nil {
+		return err
+	}
 
 	if err := d.ensureAccessToken(ctx); err != nil {
 		return err

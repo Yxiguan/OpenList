@@ -31,7 +31,6 @@ import (
 const (
 	apiBaseURL       = "https://api.guangyapan.com"
 	accountBaseURL   = "https://account.guangyapan.com"
-	guangyaClientID  = "aMe-8VSlkrbQXpUR"
 	sdkVersion       = "9.0.2"
 	protocolVersion  = "301"
 	clientVersion    = "0.0.1"
@@ -43,6 +42,15 @@ const (
 )
 
 var didPattern = regexp.MustCompile(`(?i)(?:wdi10\.)?([0-9a-f]{32})`)
+
+func (d *GuangyaPan) normalizeClientID() (string, error) {
+	clientID := strings.TrimSpace(d.ClientID)
+	if clientID == "" {
+		return "", fmt.Errorf("missing client id")
+	}
+	d.ClientID = clientID
+	return clientID, nil
+}
 
 func (d *GuangyaPan) parseExpiresAt() (time.Time, error) {
 	if strings.TrimSpace(d.ExpiresAt) == "" {
@@ -121,6 +129,10 @@ func (d *GuangyaPan) refreshAccessToken(ctx context.Context) error {
 	if strings.TrimSpace(d.RefreshToken) == "" {
 		return fmt.Errorf("missing refresh token")
 	}
+	clientID, err := d.normalizeClientID()
+	if err != nil {
+		return err
+	}
 
 	var resp accountTokenResp
 	req := base.RestyClient.R()
@@ -128,7 +140,7 @@ func (d *GuangyaPan) refreshAccessToken(ctx context.Context) error {
 	req.SetHeader("Content-Type", "application/json")
 	req.SetHeader("User-Agent", androidUserAgent)
 	req.SetHeader("x-action", "401")
-	req.SetHeader("x-client-id", guangyaClientID)
+	req.SetHeader("x-client-id", clientID)
 	req.SetHeader("x-client-version", clientVersion)
 	req.SetHeader("x-device-id", d.DeviceID)
 	req.SetHeader("x-device-model", androidModel)
@@ -141,7 +153,7 @@ func (d *GuangyaPan) refreshAccessToken(ctx context.Context) error {
 	req.SetHeader("x-protocol-version", protocolVersion)
 	req.SetHeader("x-sdk-version", sdkVersion)
 	req.SetBody(base.Json{
-		"client_id":     guangyaClientID,
+		"client_id":     clientID,
 		"client_secret": "",
 		"grant_type":    "refresh_token",
 		"refresh_token": d.RefreshToken,
