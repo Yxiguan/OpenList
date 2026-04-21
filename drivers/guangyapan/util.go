@@ -35,6 +35,8 @@ const (
 	protocolVersion  = "301"
 	clientVersion    = "0.0.1"
 	defaultPageSize  = 200
+	guangyaUAApp     = "app"
+	guangyaUAWeb     = "web"
 	androidUserAgent = "Dalvik/2.1.0 (Linux; U; Android 13; 23013RK75C Build/TKQ1.221114.001)"
 	androidModel     = "23013RK75C"
 	androidDevice    = "Xiaomi-23013RK75C"
@@ -50,6 +52,31 @@ func (d *GuangyaPan) normalizeClientID() (string, error) {
 	}
 	d.ClientID = clientID
 	return clientID, nil
+}
+
+func (d *GuangyaPan) normalizeUserAgentMode() (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(d.UserAgent))
+	if mode == "" {
+		mode = guangyaUAApp
+	}
+	switch mode {
+	case guangyaUAApp, guangyaUAWeb:
+		d.UserAgent = mode
+		return mode, nil
+	default:
+		return "", fmt.Errorf("invalid user agent mode: %s", d.UserAgent)
+	}
+}
+
+func (d *GuangyaPan) requestUserAgent() (string, error) {
+	mode, err := d.normalizeUserAgentMode()
+	if err != nil {
+		return "", err
+	}
+	if mode == guangyaUAWeb {
+		return base.UserAgentNT, nil
+	}
+	return androidUserAgent, nil
 }
 
 func (d *GuangyaPan) parseExpiresAt() (time.Time, error) {
@@ -133,12 +160,16 @@ func (d *GuangyaPan) refreshAccessToken(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	userAgent, err := d.requestUserAgent()
+	if err != nil {
+		return err
+	}
 
 	var resp accountTokenResp
 	req := base.RestyClient.R()
 	req.SetContext(ctx)
 	req.SetHeader("Content-Type", "application/json")
-	req.SetHeader("User-Agent", androidUserAgent)
+	req.SetHeader("User-Agent", userAgent)
 	req.SetHeader("x-action", "401")
 	req.SetHeader("x-client-id", clientID)
 	req.SetHeader("x-client-version", clientVersion)
@@ -192,11 +223,15 @@ func (d *GuangyaPan) apiPost(ctx context.Context, path string, body any, out any
 }
 
 func (d *GuangyaPan) apiPostWithRetry(ctx context.Context, path string, body any, out any, refreshed bool, allowedCodes ...int) (int, error) {
+	userAgent, err := d.requestUserAgent()
+	if err != nil {
+		return 0, err
+	}
 	req := base.RestyClient.R()
 	req.SetContext(ctx)
 	req.SetHeader("Authorization", "Bearer "+d.AccessToken)
 	req.SetHeader("Content-Type", "application/json")
-	req.SetHeader("User-Agent", androidUserAgent)
+	req.SetHeader("User-Agent", userAgent)
 	req.SetHeader("dt", "4")
 	req.SetHeader("did", d.DeviceID)
 	req.SetHeader("traceparent", newTraceParent())

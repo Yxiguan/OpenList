@@ -29,6 +29,9 @@ func (d *GuangyaPan) Init(ctx context.Context) error {
 	if _, err := d.normalizeClientID(); err != nil {
 		return err
 	}
+	if _, err := d.normalizeUserAgentMode(); err != nil {
+		return err
+	}
 
 	if err := d.ensureAccessToken(ctx); err != nil {
 		return err
